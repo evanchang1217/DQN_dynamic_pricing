@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Background DQN Training</title>
+    {% load static %}
+
+    <script>
+        // 動態產生每個商品的欄位
+        function generateFields() {
+            var productCount = document.getElementById("productCount").value; // 欄位數量
+            var container = document.getElementById("fieldsContainer");
+            container.innerHTML = "";
+            for (var i = 0; i < productCount; i++) {
+                var fs = document.createElement("fieldset");
+                var legend = document.createElement("legend");
+                legend.innerHTML = "商品 " + i;
+                fs.appendChild(legend);
+
+                fs.innerHTML += '買進價格下限: <input type="text" name="buy_low_' + i + '" required><br>';
+                fs.innerHTML += '買進價格上限: <input type="text" name="buy_high_' + i + '" required><br>';
+                fs.innerHTML += '賣出價格下限: <input type="text" name="sell_low_' + i + '" required><br>';
+                fs.innerHTML += '賣出價格上限: <input type="text" name="sell_high_' + i + '" required><br>';
+                container.appendChild(fs);
+                container.innerHTML += "<br>";
+            }
+        }
+
+        // 輪詢 /training_status_api/，加入 timestamp 避免快取，並每秒固定呼叫一次
+        function pollStatus() {
+            fetch('/training_status_api/?t=' + new Date().getTime())
+                .then(res => res.json())
+                .then(data => {
+                    // 1. 更新主要訓練狀態
+                    document.getElementById("currentEpisode").textContent = data.current_episode + " / " + data.total_episodes;
+                    //document.getElementById("avgBuy").textContent = data.avg_buy_price.join(", ");
+                    //document.getElementById("avgSell").textContent = data.avg_sell_price.join(", ");
+                    document.getElementById("reward").textContent = data.reward;
+                    document.getElementById("statusMsg").textContent = data.message;
+
+                    // 2. 逐一顯示每個商品的買賣價格
+                    //    新增一個容器用來放「商品詳細資訊」
+                    var productContainer = document.getElementById("productContainer");
+                    productContainer.innerHTML = ""; // 先清空前一次的內容
+
+                    // data.avg_buy_price 和 data.avg_sell_price 都是陣列
+                    data.avg_buy_price.forEach(function(buy, i) {
+                        var sell = data.avg_sell_price[i];
+                        var p = document.createElement("p");
+                        p.textContent = "Product " + i + ": Buy = " + buy + ", Sell = " + sell;
+                        productContainer.appendChild(p);
+                    });
+
+                    // 3. 一秒後再次輪詢
+                    setTimeout(pollStatus, 1000);
+                })
+                .catch(err => console.log(err));
+        }
+
+        // 每秒刷新圖檔，防止舊圖被快取
+        function refreshImage() {
+            var img = document.getElementById("rewardImg");
+            img.src = "{% static 'images/dqn_reward.png' %}?" + new Date().getTime();
+        }
+        setInterval(refreshImage, 1000);
+
+        // 當網頁載入完成時，啟動輪詢
+        window.onload = function() {
+            pollStatus();
+        };
+    </script>
+</head>
+<body>
+    <h1>Background DQN Training</h1>
+    <form method="POST">
+        {% csrf_token %}
+        <label>Episodes: <input type="text" name="num_episodes" value="100"></label><br>
+        <label>Max Steps: <input type="text" name="max_steps" value="100"></label><br>
+        <label>商品數量: <input type="number" id="productCount" name="product_count" value="3" min="1"></label>
+        <button type="button" onclick="generateFields()">生成欄位</button>
+        <div id="fieldsContainer">
+            <!-- 預設先顯示 3 個商品欄位 -->
+        </div>
+        <input type="submit" value="開始訓練">
+    </form>
+
+    {% if message %}
+        <p>{{ message }}</p>
+    {% endif %}
+
+    <hr>
+    <h2>訓練狀態</h2>
+    <p>Episode: <span id="currentEpisode">-</span></p>
+    <!-- <p>Avg Buy: <span id="avgBuy">-</span></p> -->
+    <!-- <p>Avg Sell: <span id="avgSell">-</span></p> -->
+    
+    
+    <p>Reward: <span id="reward">-</span></p>
+    <p>Message: <span id="statusMsg">-</span></p>
+
+    <!-- 新增一個區塊來顯示每個商品的詳細資料 -->
+    <hr>
+    <h2>商品詳細資訊</h2>
+    <div id="productContainer"></div>
+
+    <hr>
+    <h2>Reward 圖</h2>
+    <img id="rewardImg" src="{% static 'images/dqn_reward.png' %}" alt="Reward Graph" width="600">
+</body>
+</html>
