@@ -1,0 +1,13 @@
+# === Python ===
+__pycache__/
+
+
+# === PyTorch / ML ===
+*.pt
+*.pth
+
+
+# === Django ===
+*.sqlite3
+db.sqlite3
+staticfiles/
